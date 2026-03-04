@@ -17,7 +17,7 @@ import tracemalloc
 from SpaceFlow.SpaceFlow import SpaceFlow
 
 
-seeds = [42, 123, 456, 789, 2024]
+seeds = [123, 456, 789, 2024]
 
 def set_seed(seed):
     np.random.seed(seed)
@@ -99,8 +99,8 @@ for seed in seeds:
             epochs=1000,
             max_patience=50,
             min_stop=100,
-            random_seed=42,
-            gpu=4,
+            random_seed=seed,
+            gpu=7,
             regularization_acceleration=True,
             edge_subset_sz=1000000,
             embedding_save_filepath=os.path.join(dir_output, "low_dim_data.csv"),    
