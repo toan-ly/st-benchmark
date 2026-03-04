@@ -9,7 +9,6 @@ library(aricode)
 library(clevr)  # For homogeneity, completeness, v-measure
 options(bitmapType = 'cairo')
 library(cluster) # For silhouette score
-library(bench)   # For benchmarking execution time
 
 
 seeds <- c(42, 123, 456, 789, 2024)
@@ -133,17 +132,17 @@ save_results <- function(sp_data, metrics_df, dir.output) {
   
 }
 
-# data_path <- file.path("/Users/toanne/Desktop/Spatial-Transcriptomics-Benchmark/data/DLPFC_new")
-data_path <- file.path("/Users/lytq/Spatial-Transcriptomics-Benchmark/data/DLPFC")
-save_root <- file.path("/Users/lytq/Spatial-Transcriptomics-Benchmark/Results")
+data_path <- file.path("/Users/toanly/Downloads/Spatial-Transcriptomics-Benchmark/data/DLPFC")
+save_root <- file.path("/Users/toanly/Downloads/Spatial-Transcriptomics-Benchmark/Results")
 
-# save_path <- file.path("/Users/toanne/Desktop/Spatial-Transcriptomics-Benchmark/RESULTS/DLPFC/Seurat")
 metrics_list <- list()
 
 for (seed in seeds) {
   cat("\n==============================\n")
   cat("RUNNING SEED:", seed, "\n")
   cat("==============================\n")
+
+  set.seed(seed)
 
   # Loop through all batches
   for (sample.name in names(batch_cluster_map)) {
@@ -157,58 +156,72 @@ for (seed in seeds) {
       dir.create(dir.output, recursive = TRUE)
     }
 
-    benchmark <- mark({
-      # Load spatial transcriptomics data
-      sp_data <- tryCatch({
-        Load10X_Spatial(dir.input, filename = "filtered_feature_bc_matrix.h5")
-      }, error = function(e) {
-        stop("Error loading spatial data for batch ", sample.name, ": ", e$message)
-      })
+    # Start timing and memory tracking
+    start_time <- Sys.time()
+    gc(reset = T)
 
-      # Load metadata and add to the Seurat object
-      df_meta <- read.table(file.path(dir.input, 'metadata.tsv'))
-      sp_data <- AddMetaData(sp_data, metadata = df_meta$layer_guess, col.name = 'layer_guess')
+    # Load spatial transcriptomics data
+    sp_data <- tryCatch({
+      Load10X_Spatial(dir.input, filename = "filtered_feature_bc_matrix.h5")
+    }, error = function(e) {
+      stop("Error loading spatial data for batch ", sample.name, ": ", e$message)
+    })
 
-      # Data processing: Visualization and QC plots
-      plot1 <- VlnPlot(sp_data, features = "nCount_Spatial", pt.size = 0.1) + NoLegend()
-      plot2 <- SpatialFeaturePlot(sp_data, features = "nCount_Spatial") + theme(legend.position = "right")
-      qc_plot = wrap_plots(plot1, plot2)
-      # ggsave(file.path(dir.output, 'QC.png'), plot = qc_plot, width = 10, height = 5)
+    # Load metadata and add to the Seurat object
+    df_meta <- read.table(file.path(dir.input, 'metadata.tsv'))
+    sp_data <- AddMetaData(sp_data, metadata = df_meta$layer_guess, col.name = 'layer_guess')
 
-      # Data normalization using SCTransform
-      sp_data <- SCTransform(sp_data, assay = "Spatial", verbose = FALSE)
+    # Data processing: Visualization and QC plots
+    plot1 <- VlnPlot(sp_data, features = "nCount_Spatial", pt.size = 0.1) + NoLegend()
+    plot2 <- SpatialFeaturePlot(sp_data, features = "nCount_Spatial") + theme(legend.position = "right")
+    qc_plot = wrap_plots(plot1, plot2)
+    # ggsave(file.path(dir.output, 'QC.png'), plot = qc_plot, width = 10, height = 5)
 
-      # Dimensionality reduction and clustering
-      sp_data <- RunPCA(sp_data, assay = "SCT", verbose = FALSE, npcs = 50)
-      sp_data <- FindNeighbors(sp_data, reduction = "pca", dims = 1:30)
+    # Data normalization using SCTransform
+    sp_data <- SCTransform(sp_data, assay = "Spatial", verbose = FALSE)
 
-      # Find optimal resolution for clustering
-      sp_data <- tryCatch({
-        for (resolution in seq(1, 0.1, by = -0.01)) {
-          sp_data <- FindClusters(sp_data, verbose = FALSE, resolution = resolution)
-          if (length(levels(sp_data@meta.data$seurat_clusters)) == n_clusters) {
-            cat("Optimal resolution found for batch", sample.name, ": ", resolution, "\n")
-            break
-          }
+    # Dimensionality reduction and clustering
+    sp_data <- RunPCA(sp_data, assay = "SCT", verbose = FALSE, npcs = 50)
+    sp_data <- FindNeighbors(sp_data, reduction = "pca", dims = 1:30)
+
+    # Find optimal resolution for clustering
+    sp_data <- tryCatch({
+      for (resolution in seq(1, 0.1, by = -0.01)) {
+        sp_data <- FindClusters(sp_data, verbose = FALSE, resolution = resolution)
+        if (length(levels(sp_data@meta.data$seurat_clusters)) == n_clusters) {
+          cat("Optimal resolution found for batch", sample.name, ": ", resolution, "\n")
+          break
         }
-        sp_data
-      }, error = function(e) {
-        stop("Error during clustering for batch ", sample.name, ": ", e$message)
-      })
+      }
+      sp_data
+    }, error = function(e) {
+      stop("Error during clustering for batch ", sample.name, ": ", e$message)
+    })
 
-      # Run UMAP for visualization
-      sp_data <- RunUMAP(sp_data, reduction = "pca", dims = 1:30)
+    # Run UMAP for visualization
+    sp_data <- RunUMAP(sp_data, reduction = "pca", dims = 1:30)
 
-      # Evaluate clustering performance
-      gt <- sp_data@meta.data$layer_guess
-      pred <- sp_data@meta.data$seurat_clusters
-      pca_data <- sp_data@reductions$pca@cell.embeddings
-      metrics <- calculate_metrics(gt, pred, pca_data)
-      cat("ARI for batch", sample.name, ":", metrics$ARI, "\n")
-    }, iterations = 1L)
 
-    execution_time <- as.numeric(benchmark$time[[1]])  # Time in seconds
-    memory_usage <- as.numeric(benchmark$mem_alloc[[1]]) / (1024^2)  # Memory in MB
+    execution_time <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))  # Time in seconds
+
+    memInfo1 <- gc()
+    # memInfo1[11]
+    # memInfo1[12]
+
+    gc(reset = TRUE)
+    memInfo2 <- gc()
+    # memInfo2[11]
+    # memInfo2[12]
+    memory_usage <- memInfo1["Vcells", ncol(memInfo1)] - memInfo2["Vcells", ncol(memInfo2)]  # Memory usage in MB
+    print(memory_usage)
+
+
+    # Evaluate clustering performance
+    gt <- sp_data@meta.data$layer_guess
+    pred <- sp_data@meta.data$seurat_clusters
+    pca_data <- sp_data@reductions$pca@cell.embeddings
+    metrics <- calculate_metrics(gt, pred, pca_data)
+    cat("ARI for batch", sample.name, ":", metrics$ARI, "\n")
 
     # Create metrics dataframe
     metrics_df <- data.frame(
@@ -222,6 +235,8 @@ for (seed in seeds) {
       Time = execution_time,
       Memory = memory_usage
     )
+
+    
 
     # Save results
     save_results(sp_data, metrics_df, dir.output)
