@@ -29,8 +29,8 @@ data_names = [i for i in data_names if i.isdigit()]
 
 device = 'cuda:7' if torch.cuda.is_available() else 'cpu'
 
-# SEEDS = [42, 123, 456, 789, 2024]
-SEEDS = [789, 2024]
+SEEDS = [42, 123, 456, 789, 2024]
+
 
 for seed in SEEDS:
     print(f"================ RUNNING SEED {seed} ======================")

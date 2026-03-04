@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 from scipy.spatial import distance_matrix
 from torch_geometric.nn import GCNConv, DeepGraphInfomax
 from sklearn.neighbors import kneighbors_graph
-from SpaceFlow.util import sparse_mx_to_torch_edge_list, corruption
+from SpaceFlow.SpaceFlow.util import sparse_mx_to_torch_edge_list, corruption
 
 class SpaceFlow(object):
     """An object for analysis of spatial transcriptomics data.
