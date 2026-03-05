@@ -6,7 +6,8 @@ library(mclust)
 library(aricode)
 library(clevr)  # For homogeneity, completeness, v-measure
 library(cluster) # For silhouette score
-library(bench)   # For benchmarking execution time
+
+seeds <- c(42, 123, 456, 789, 2024)
 
 batch_cluster_map <- list(
   '151669' = 5, '151670' = 5, '151671' = 5, '151672' = 5,
@@ -128,23 +129,32 @@ save_results <- function(dlpfc, labels, metrics_df, dir.output) {
 }
 
 
-data_path <- file.path("/Users/toanne/Desktop/Spatial-Transcriptomics-Benchmark/data/DLPFC_new")
-save_path <- file.path("/Users/toanne/Desktop/Spatial-Transcriptomics-Benchmark/RESULTS/DLPFC/BayesSpace")
+data_path <- file.path("/Users/toanly/Downloads/Spatial-Transcriptomics-Benchmark/data/DLPFC")
+save_path <- file.path("/Users/toanly/Downloads/Spatial-Transcriptomics-Benchmark/Results")
 
 metrics_list <- list()
 
-for (sample.name in names(batch_cluster_map)) {
-  cat("Processing batch:", sample.name, "\n")
-  n_clusters <- batch_cluster_map[[sample.name]]
+for (seed in seeds) {
+  cat("\n==============================\n")
+  cat("RUNNING SEED:", seed, "\n")
+  cat("==============================\n")
 
-  dir.input <- file.path(data_path, sample.name)
-  dir.output <- file.path(save_path, sample.name)
+  set.seed(seed)
 
-  if (!dir.exists(file.path(dir.output))) {
-    dir.create(file.path(dir.output), recursive = TRUE)
-  }
+  for (sample.name in names(batch_cluster_map)) {
+    cat("Processing batch:", sample.name, "\n")
+    n_clusters <- batch_cluster_map[[sample.name]]
 
-  benchmark <- mark({
+    dir.input <- file.path(data_path, sample.name)
+    dir.output <- file.path(save_path, as.character(seed), "DLPFC", "BayesSpace", sample.name)
+
+    if (!dir.exists(file.path(dir.output))) {
+      dir.create(file.path(dir.output), recursive = TRUE)
+    }
+
+    start_time <- Sys.time()
+    gc(reset = TRUE)
+
     dlpfc <- getRDS("2020_maynard_prefrontal-cortex", sample.name)
     dlpfc_temp <- read10Xh5(dir.input)
     dlpfc_temp <- dlpfc_temp[, match(colnames(dlpfc), colnames(dlpfc_temp))]
@@ -153,11 +163,11 @@ for (sample.name in names(batch_cluster_map)) {
     dlpfc$pxl_col_in_fullres <- dlpfc_temp$pxl_col_in_fullres[match_idx]
     dlpfc$pxl_row_in_fullres <- dlpfc_temp$pxl_row_in_fullres[match_idx]
 
-    set.seed(101)
+    set.seed(seed)
     dec <- scran::modelGeneVar(dlpfc)
     top <- scran::getTopHVGs(dec, n = 2000)
 
-    set.seed(102)
+    set.seed(seed)
     dlpfc <- scater::runPCA(dlpfc, subset_row=top)
 
     dlpfc <- spatialPreprocess(dlpfc, platform="Visium", skip.PCA=TRUE)
@@ -165,7 +175,7 @@ for (sample.name in names(batch_cluster_map)) {
     q <- n_clusters  
     d <- 15  
 
-    set.seed(104)
+    set.seed(seed)
     dlpfc <- spatialCluster(dlpfc, q=q, d=d, platform='Visium', 
                             nrep=10000, gamma=3, save.chain=FALSE)
 
@@ -175,29 +185,40 @@ for (sample.name in names(batch_cluster_map)) {
 
     metrics <- calculate_metrics(gt, labels, pca_data)
     cat("ARI for batch", sample.name, ":", metrics$ARI, "\n")    
-  }, iterations = 1L)
 
-  cat('Calculated metrics for', sample.name, '\n')
+    cat('Calculated metrics for', sample.name, '\n')
 
-  # Extract execution time and memory
-  execution_time <- as.numeric(benchmark$time[[1]])  # Time in seconds
-  memory_usage <- as.numeric(benchmark$mem_alloc[[1]]) / (1024^2)  # Memory in MB
+    # Extract execution time and memory
+    execution_time <- as.numeric(difftime(Sys.time(), start_time, units = "secs"))  # Time in seconds
 
-  metrics_df <- data.frame(
-    Sample = sample.name,
-    ARI = metrics$ARI,
-    AMI = metrics$AMI,
-    Homogeneity = metrics$Homogeneity,
-    Completeness = metrics$Completeness,
-    V_Measure = metrics$V_Measure,
-    ASW = metrics$ASW,
-    Time = execution_time,
-    Memory = memory_usage
-  )
+    memInfo1 <- gc()   
+    # memInfo1[11]
+    # memInfo1[12]
 
-  save_results(dlpfc, labels, metrics_df, dir.output)
-  metrics_list[[sample.name]] <- metrics_df
+    gc(reset = TRUE)
+    memInfo2 <- gc()
+    # memInfo2[11]
+    # memInfo2[12]
+    memory_usage <- memInfo1["Vcells", ncol(memInfo1)] - memInfo2["Vcells", ncol(memInfo2)]  # Memory usage in MB
+    print(memory_usage)
+
+    metrics_df <- data.frame(
+      Sample = sample.name,
+      ARI = metrics$ARI,
+      AMI = metrics$AMI,
+      Homogeneity = metrics$Homogeneity,
+      Completeness = metrics$Completeness,
+      V_Measure = metrics$V_Measure,
+      ASW = metrics$ASW,
+      Time = execution_time,
+      Memory = memory_usage
+    )
+
+    save_results(dlpfc, labels, metrics_df, dir.output)
+    metrics_list[[sample.name]] <- metrics_df
+  }
+
+  metrics_df <- do.call(rbind, metrics_list)
+  write.csv(metrics_df, file = file.path(save_path, "metrics.csv"), row.names = TRUE)
+
 }
-
-metrics_df <- do.call(rbind, metrics_list)
-write.csv(metrics_df, file = file.path(save_path, "metrics.csv"), row.names = TRUE)

@@ -22,8 +22,8 @@ batch_cluster_map <- list(
 )
 
 # Paths
-data_path <- file.path("/Users/toanne/Desktop/Spatial-Transcriptomics-Benchmark/data/BRCA1")
-save_path <- file.path("/Users/toanne/Desktop/Spatial-Transcriptomics-Benchmark/Results/")
+data_path <- file.path("/Users/toanly/Downloads/Spatial-Transcriptomics-Benchmark/data/BRCA1")
+save_path <- file.path("/Users/toanly/Downloads/Spatial-Transcriptomics-Benchmark/Results/")
 
 #' Calculate clustering evaluation metrics
 #' @param ground_truth Vector of ground truth labels
