@@ -17,7 +17,7 @@ import tracemalloc
 from SpaceFlow.SpaceFlow import SpaceFlow
 
 
-seeds = [123, 456, 789, 2024]
+seeds = [42, 123, 456, 789, 2024]
 
 def set_seed(seed):
     np.random.seed(seed)
