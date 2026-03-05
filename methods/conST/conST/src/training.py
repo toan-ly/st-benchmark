@@ -5,9 +5,9 @@ import torch
 import torch.nn as nn
 import torch.nn.modules.loss
 import torch.nn.functional as F
-from progress.bar import Bar
+from conST.progress.bar import Bar
 from sklearn.cluster import KMeans
-from src.model import conST
+from conST.src.model import conST
 from torch_geometric.utils import dropout_adj
 from torch_sparse import SparseTensor
 
