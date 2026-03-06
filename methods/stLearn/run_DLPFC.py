@@ -99,6 +99,9 @@ for seed in SEEDS:
         print(f"================ Start Processing {sample} ======================")
 
         OUTPUT_PATH = Path(f"/home/lytq/Spatial-Transcriptomics-Benchmark/Results/{seed}/DLPFC/stLearn/{sample}")
+        if OUTPUT_PATH.exists():
+            print(f"Output for sample {sample} already exists. Skipping...")
+            continue
         OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
         TILE_PATH = Path(f'{OUTPUT_PATH}/tiles/')
         TILE_PATH.mkdir(parents=True, exist_ok=True)
