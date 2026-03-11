@@ -6,6 +6,13 @@ library(mclust)
 library(aricode)
 library(clevr)  # For homogeneity, completeness, v-measure
 library(cluster) # For silhouette score
+library(sceasy)
+library(reticulate)
+library(scater)  # For runUMAP
+
+use_python("~/venvs/sceasy/bin/python", required = TRUE)
+py_config()
+
 
 seeds <- c(42, 123, 456, 789, 2024)
 
@@ -85,13 +92,13 @@ save_results <- function(dlpfc, labels, metrics_df, dir.output) {
   write.csv(metrics_df, file = file.path(dir.output, 'metrics.csv'), row.names = FALSE)
   
   # Save spatial clustering plot
-  cluster_plot <- clusterPlot(dlpfc, label=labels, palette=NULL, size=0.05) +
-    scale_fill_viridis_d(option = "A", labels = 1:7, name=NULL) +
-    labs(title=paste("BayesSpace (ARI =", round(metrics_df$ARI, 2), ")", sep="")) +
-    theme(plot.title = element_text(hjust = 0.5, size = 16))
+  # cluster_plot <- clusterPlot(dlpfc, label=labels, palette=NULL, size=0.05) +
+  #   scale_fill_viridis_d(option = "A", labels = 1:7, name=NULL) +
+  #   labs(title=paste("BayesSpace (ARI =", round(metrics_df$ARI, 2), ")", sep="")) +
+  #   theme(plot.title = element_text(hjust = 0.5, size = 16))
   
-  ggsave(file.path(dir.output, 'clustering.pdf'), plot = cluster_plot,
-         width = 6, height = 6, dpi = 300, device = "pdf")
+  # ggsave(file.path(dir.output, 'clustering.pdf'), plot = cluster_plot,
+  #        width = 6, height = 6, dpi = 300, device = "pdf")
   
   # Save reduced dimension data
   write.csv(reducedDim(dlpfc, "PCA"),
@@ -104,23 +111,27 @@ save_results <- function(dlpfc, labels, metrics_df, dir.output) {
             row.names = TRUE)
   
   # Save UMAP coordinates and plot
+  if (!"UMAP_neighbors15" %in% names(reducedDimNames(dlpfc))) {
+    set.seed(seed)
+    dlpfc <- runUMAP(dlpfc, dimred="PCA", name="UMAP_neighbors15")
+  }
   umap_coords <- as.data.frame(reducedDim(dlpfc, "UMAP_neighbors15"))
   umap_coords$spot_id <- rownames(umap_coords)
   write.csv(umap_coords,
             file = file.path(dir.output, "spatial_umap_coords.csv"),
             row.names = FALSE)
   
-  umap_plot <- ggplot(umap_coords, aes(x = V1, y = V2, color = as.factor(labels))) +
-    geom_point(size = 1.5, alpha = 0.8) +
-    scale_color_brewer(palette = "Set1") +
-    labs(title = "BayesSpace", x = "UMAP 1", y = "UMAP 2", color = 'Cluster') +
-    theme(plot.title = element_text(hjust = 0.5, size = 16),
-          panel.grid = element_blank(),
-          panel.background = element_blank(),
-          axis.line = element_line(color = "black"))
+  # umap_plot <- ggplot(umap_coords, aes(x = V1, y = V2, color = as.factor(labels))) +
+  #   geom_point(size = 1.5, alpha = 0.8) +
+  #   scale_color_brewer(palette = "Set1") +
+  #   labs(title = "BayesSpace", x = "UMAP 1", y = "UMAP 2", color = 'Cluster') +
+  #   theme(plot.title = element_text(hjust = 0.5, size = 16),
+  #         panel.grid = element_blank(),
+  #         panel.background = element_blank(),
+  #         axis.line = element_line(color = "black"))
   
-  ggsave(file.path(dir.output, 'umap.pdf'), plot = umap_plot,
-         width = 6, height = 6, dpi = 300, device = "pdf")
+  # ggsave(file.path(dir.output, 'umap.pdf'), plot = umap_plot,
+  #        width = 6, height = 6, dpi = 300, device = "pdf")
 
   # expression_data <- as.data.frame(as.matrix(assay(dlpfc, "counts")))
   # write.table(t(expression_data), 
@@ -131,8 +142,11 @@ save_results <- function(dlpfc, labels, metrics_df, dir.output) {
 
 data_path <- file.path("/Users/toanly/Downloads/Spatial-Transcriptomics-Benchmark/data/DLPFC")
 save_path <- file.path("/Users/toanly/Downloads/Spatial-Transcriptomics-Benchmark/Results")
+h5ad_path <- file.path("/Users/toanly/Downloads/Spatial-Transcriptomics-Benchmark/data/DLPFC12")
 
 metrics_list <- list()
+
+# dlpfc_all <- spatialLIBD::fetch_data(type="sce")
 
 for (seed in seeds) {
   cat("\n==============================\n")
@@ -155,13 +169,30 @@ for (seed in seeds) {
     start_time <- Sys.time()
     gc(reset = TRUE)
 
-    dlpfc <- getRDS("2020_maynard_prefrontal-cortex", sample.name)
-    dlpfc_temp <- read10Xh5(dir.input)
-    dlpfc_temp <- dlpfc_temp[, match(colnames(dlpfc), colnames(dlpfc_temp))]
+    # dlpfc <- getRDS("2020_maynard_prefrontal-cortex", sample.name) # getRDS not working anymore
+    # dlpfc_temp <- read10Xh5(dir.input)
+    # dlpfc_temp <- dlpfc_temp[, match(colnames(dlpfc), colnames(dlpfc_temp))]
 
-    match_idx <- match(dlpfc$barcode, dlpfc_temp$barcode)
-    dlpfc$pxl_col_in_fullres <- dlpfc_temp$pxl_col_in_fullres[match_idx]
-    dlpfc$pxl_row_in_fullres <- dlpfc_temp$pxl_row_in_fullres[match_idx]
+    # match_idx <- match(dlpfc$barcode, dlpfc_temp$barcode)
+    # dlpfc$pxl_col_in_fullres <- dlpfc_temp$pxl_col_in_fullres[match_idx]
+    # dlpfc$pxl_row_in_fullres <- dlpfc_temp$pxl_row_in_fullres[match_idx]
+
+
+    # Load data
+    h5ad_file <- file.path(h5ad_path, paste0(sample.name, ".h5ad"))
+    rds_file <- file.path(h5ad_path, paste0(sample.name, ".rds"))
+
+    if (!file.exists(rds_file)) {
+      sceasy::convertFormat(
+        h5ad_file, 
+        from="anndata", 
+        to="seurat",
+        outFile = rds_file,
+      )
+    }
+    dlpfc_temp <- readRDS(rds_file)
+    dlpfc <- as.SingleCellExperiment(dlpfc_temp)
+    
 
     set.seed(seed)
     dec <- scran::modelGeneVar(dlpfc)
@@ -180,7 +211,8 @@ for (seed in seeds) {
                             nrep=10000, gamma=3, save.chain=FALSE)
 
     labels <- dlpfc$spatial.cluster
-    gt <- dlpfc$layer_guess
+    # gt <- dlpfc$layer_guess
+    gt <- dlpfc$cluster.init
     pca_data <- reducedDim(dlpfc, "PCA")
 
     metrics <- calculate_metrics(gt, labels, pca_data)
