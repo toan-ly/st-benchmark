@@ -19,6 +19,9 @@ import time
 import psutil
 import tracemalloc
 
+import warnings
+warnings.filterwarnings('ignore')
+
 SEEDS = [42, 123, 456, 789, 2024]
 
 BASE_PATH = Path('/home/lytq/Spatial-Transcriptomics-Benchmark/data/DLPFC')
@@ -29,6 +32,7 @@ sample_list = ['151507', '151508', '151509', '151510',
 def set_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
 
 
 def evaluate_clustering(adata: sc.AnnData, df_meta, time_taken: float, memory_used: float, output_dir: str) -> dict:
@@ -136,7 +140,7 @@ for seed in SEEDS:
         data_.X = data_.obsm['raw_SME_normalized']
         st.pp.scale(data_)
         st.em.run_pca(data_,n_comps=30)
-        st.tl.clustering.kmeans(data_, n_clusters=n_cluster, use_data="X_pca", key_added="X_pca_kmeans")
+        st.tl.clustering.kmeans(data_, n_clusters=n_cluster, use_data="X_pca", key_added="X_pca_kmeans", random_state=seed)
         
         st.pp.neighbors(data_, n_neighbors=10, use_rep="X_pca")
         st.em.run_umap(data_)

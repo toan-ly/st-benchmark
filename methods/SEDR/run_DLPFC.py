@@ -34,9 +34,9 @@ SEEDS = [42, 123, 456, 789, 2024]
 
 for seed in SEEDS:
     print(f"================ RUNNING SEED {seed} ======================")
+    SEDR.fix_seed(seed)
     for section_id in data_names:
         print(f"    => Start Processing {section_id}")
-        SEDR.fix_seed(seed)
         
         n_clusters = 5 if section_id in ['151669','151670','151671','151672'] else 7 
         
@@ -75,7 +75,7 @@ for seed in SEEDS:
         sedr_feat, _, _, _ = sedr_net.process()
         adata.obsm['SEDR'] = sedr_feat
         
-        SEDR.mclust_R(adata, n_clusters, use_rep='SEDR', key_added='SEDR')
+        SEDR.mclust_R(adata, n_clusters, use_rep='SEDR', key_added='SEDR', random_seed=seed)
         print('Clustering finished')
         
         # Evaluate clustering
